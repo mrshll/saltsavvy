@@ -42,13 +42,13 @@ def load_combined_dataset(start_date, num_hours, level, param_short_name):
     return combined_ds
 
 
-ds = load_combined_dataset(datetime.datetime(2021, 1, 1), 24, "surface",
+ds = load_combined_dataset(datetime.datetime(2022, 1, 29), 24, "surface",
                            "WEASD")
-std_dev = ds.WEASD.std(dim="time")
-std_dev.values
+sum = ds.WEASD.sum(dim="time")
+sum.values
 
 ax = plt.axes(projection=projection)
-ax.contourf(std_dev.x, std_dev.y, std_dev)
+ax.contourf(sum.x, sum.y, sum)
 ax.coastlines()
 
 plt.show()
