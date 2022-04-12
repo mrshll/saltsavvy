@@ -15,12 +15,15 @@ PROJECTION = ccrs.LambertConformal(central_longitude=262.5,
                                    globe=ccrs.Globe(semimajor_axis=6371229,
                                                     semiminor_axis=6371229))
 
+FORECAST_HORIZON_HOURS = 48
+MODEL_FORECAST = 'fcst'
+MODEL_ANALYSIS = 'anl'
+
 
 @dataclasses.dataclass(frozen=True)
 class HRRRForecast:
-    run_hour: datetime.datetime
+    issue_time: datetime.datetime
     level: str
-    model: str
 
     __fs = s3fs.S3FileSystem(anon=True)
 
@@ -50,9 +53,33 @@ class HRRRForecast:
         chunk_xy = self.__class__.get_chunk_xy_for_lat_lng(lat, lng)
         return data[:, chunk_xy[0], chunk_xy[1]]
 
+    def fetch_analysis_for_lat_lng(self, hrrr_var, lat, lng):
+        chunk_id = self.get_chunk_id_for_lat_lng(lat, lng)
+        chunk_xy = self.get_chunk_xy_for_lat_lng(lat, lng)
+        return [
+            self.fetch_chunk_data(
+                hrrr_var,
+                chunk_id,
+                model=MODEL_ANALYSIS,
+                issue_time=self.issue_time +
+                datetime.timedelta(hours=hour_delta))[chunk_xy[0], chunk_xy[1]]
+            for hour_delta in range(FORECAST_HORIZON_HOURS)
+        ]
+
     @cache
-    def fetch_chunk_data(self, hrrr_var, chunk_id):
-        s3_url = self.get_s3_chunk_url(hrrr_var, chunk_id)
+    def fetch_chunk_data(self,
+                         hrrr_var,
+                         chunk_id,
+                         model=MODEL_FORECAST,
+                         issue_time=None):
+        if not issue_time:
+            issue_time = self.issue_time
+
+        s3_url = self.get_s3_chunk_url(issue_time,
+                                       hrrr_var,
+                                       chunk_id,
+                                       model,
+                                       prefix=False)
         with self.__fs.open(s3_url, 'rb') as compressed_data:
             buffer = ncd.blosc.decompress(compressed_data.read())
             dtype = "<f2"
@@ -71,39 +98,44 @@ class HRRRForecast:
 
         return data_array
 
-    def get_explorer_url(self):
+    def get_explorer_url(self, model=MODEL_FORECAST):
         url = "https://hrrrzarr.s3.amazonaws.com/index.html"
-        url += self.run_hour.strftime(
-            f"#{self.level}/%Y%m%d/%Y%m%d_%Hz_{self.model}.zarr/")
+        url += self.issue_time.strftime(
+            f"#{self.level}/%Y%m%d/%Y%m%d_%Hz_{model}.zarr/")
         return url
 
-    def get_https_chunk_url(self, hrrr_var, chunk_id):
+    def get_https_chunk_url(self, hrrr_var, chunk_id, model=MODEL_FORECAST):
         url = "https://hrrrzarr.s3.amazonaws.com"
-        url += self.run_hour.strftime(
-            f"/{self.level}/%Y%m%d/%Y%m%d_%Hz_{self.model}.zarr/")
+        url += self.issue_time.strftime(
+            f"/{self.level}/%Y%m%d/%Y%m%d_%Hz_{model}.zarr/")
         url += f"{hrrr_var.level}/{hrrr_var.name}/{hrrr_var.level}/{hrrr_var.name}"
-        url += f"/{self.__format_chunk_id(chunk_id)}"
+        url += f"/{self.__format_chunk_id(chunk_id, model)}"
         return url
 
-    def get_s3_chunk_url(self, hrrr_var, chunk_id, prefix=False):
-        url = self.__get_s3_subgroup_url(hrrr_var, prefix)
-        url += f"/{hrrr_var.name}/{self.__format_chunk_id(chunk_id)}"
+    def get_s3_chunk_url(self,
+                         issue_time,
+                         hrrr_var,
+                         chunk_id,
+                         model=MODEL_FORECAST,
+                         prefix=False):
+        url = self.__get_s3_subgroup_url(issue_time, hrrr_var, model, prefix)
+        url += f"/{hrrr_var.name}/{self.__format_chunk_id(chunk_id, model)}"
         return url
 
-    def __get_s3_group_url(self, hrrr_var, prefix=True):
+    def __get_s3_group_url(self, issue_time, hrrr_var, model, prefix):
         url = "s3://hrrrzarr/" if prefix else "hrrrzarr/"
-        url += self.run_hour.strftime(
-            f"{self.level}/%Y%m%d/%Y%m%d_%Hz_{self.model}.zarr/")
+        url += issue_time.strftime(
+            f"{self.level}/%Y%m%d/%Y%m%d_%Hz_{model}.zarr/")
         url += f"{hrrr_var.level}/{hrrr_var.name}"
         return url
 
-    def __get_s3_subgroup_url(self, hrrr_var, prefix=True):
-        url = self.__get_s3_group_url(hrrr_var, prefix)
+    def __get_s3_subgroup_url(self, issue_time, hrrr_var, model, prefix):
+        url = self.__get_s3_group_url(issue_time, hrrr_var, model, prefix)
         url += f"/{hrrr_var.level}"
         return url
 
-    def __format_chunk_id(self, chunk_id):
-        if self.model == "fcst":
+    def __format_chunk_id(self, chunk_id, model):
+        if model == "fcst":
             # Extra id part since forecasts have an additional (time) dimension
             return "0." + chunk_id
         else:
