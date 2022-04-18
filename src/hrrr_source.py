@@ -1,7 +1,6 @@
 import cartopy.crs as ccrs
 import dataclasses
 import datetime
-from enum import Enum
 from functools import cache
 import numcodecs as ncd
 import numpy as np
@@ -87,8 +86,7 @@ class HRRRSource:
     def __get_s3_group_url(self, hrrr_var: HRRRVariable,
                            issue_time: datetime.datetime, model: str):
         url = "hrrrzarr/"
-        url += issue_time.strftime(
-            f"{hrrr_var.level}/%Y%m%d/%Y%m%d_%Hz_{model}.zarr/")
+        url += issue_time.strftime(f"sfc/%Y%m%d/%Y%m%d_%Hz_{model}.zarr/")
         url += f"{hrrr_var.level}/{hrrr_var.name}"
         return url
 

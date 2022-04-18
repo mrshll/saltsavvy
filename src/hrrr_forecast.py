@@ -1,15 +1,7 @@
 from math import floor
-import cartopy.crs as ccrs
-import dataclasses
 import datetime
-from enum import Enum
-from functools import cache
-import numcodecs as ncd
-import numpy as np
-import s3fs
-import xarray as xr
 
-from hrrr_source import HRRRSource, HRRRVariable
+from .hrrr_source import HRRRSource, HRRRVariable
 
 FORECAST_HORIZON_HOURS = 48
 MODEL_FORECAST = 'fcst'
@@ -18,9 +10,10 @@ MODEL_ANALYSIS = 'anl'
 __source = HRRRSource()
 
 
-def fetch_analysis_for_lat_lng(hrrr_var: HRRRVariable, lat: float, lng: float,
+def fetch_analysis_for_lat_lng(hrrr_var: HRRRVariable,
                                start_date: datetime.datetime,
-                               end_date: datetime.datetime):
+                               end_date: datetime.datetime, lat: float,
+                               lng: float):
     chunk_id = __source.get_chunk_id_for_lat_lng(lat, lng)
     chunk_xy = __source.get_chunk_xy_for_lat_lng(lat, lng)
 
@@ -31,6 +24,7 @@ def fetch_analysis_for_lat_lng(hrrr_var: HRRRVariable, lat: float, lng: float,
         data.append(
             __source.fetch_chunk_data(hrrr_var, issue_time, MODEL_ANALYSIS,
                                       chunk_id)[chunk_xy[0], chunk_xy[1]])
+    return data
 
 
 def fetch_forecast_for_lat_lng(hrrr_var: HRRRVariable,
