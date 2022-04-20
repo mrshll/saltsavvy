@@ -1,7 +1,7 @@
 from math import floor
 import datetime
 
-from .hrrr_source import HRRRSource, HRRRVariable
+from hrrr_source import HRRRSource, HRRRVariable
 
 FORECAST_HORIZON_HOURS = 48
 MODEL_FORECAST = 'fcst'
